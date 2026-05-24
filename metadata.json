@@ -1,0 +1,6 @@
+{
+  "name": "Kalkulator Metaboliczny",
+  "description": "Precyzyjny kalkulator zapotrzebowania kalorycznego (BMR i TDEE) oraz makroskładników dla Twojego celu zdrowotnego.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
