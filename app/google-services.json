@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "569468029784",
+    "project_id": "meta-379a0",
+    "storage_bucket": "meta-379a0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:569468029784:android:4d1b44bf285b942f08732d",
+        "android_client_info": {
+          "package_name": "com.aistudio.kalkulatormetaboliczny.zxtqpy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvDTtj0LW0EToNUxS9Ms-20vDw8QIzwoY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:569468029784:android:02077c0e9358a1a308732d",
+        "android_client_info": {
+          "package_name": "com.company.metax"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvDTtj0LW0EToNUxS9Ms-20vDw8QIzwoY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
