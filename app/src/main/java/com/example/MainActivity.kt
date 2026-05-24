@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -10,9 +11,11 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -23,50 +26,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.data.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.CarbsColor
 import com.example.ui.theme.ProteinColor
 import com.example.ui.theme.FatsColor
+import com.example.viewmodel.MetabolicViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-
-// Enums for precise metabolic computations
-enum class Gender(val displayName: String, val icon: String) {
-    MALE("Mężczyzna", "♂"),
-    FEMALE("Kobieta", "♀")
-}
-
-enum class BmrFormula(val displayName: String, val detailedDesc: String) {
-    MIFFLIN_ST_JEOR("Mifflin-St Jeor", "Współczesny standard naukowy, zalecany dla większości osób."),
-    KATCH_MCARDLE("Katch-McArdle", "Najdokładniejszy dla osób o znanej zawartości tkanki tłuszczowej (oparty na LBM)."),
-    HARRIS_BENEDICT("Harris-Benedict (Klasyczny)", "Tradycyjny wzór, niezawodny dla osób średnio aktywnych.")
-}
-
-enum class DietType(val displayName: String, val detailedDesc: String) {
-    BALANCED("Zrównoważona (Standard)", "Białko: 2.0g/kg, Tłuszcze: 25%, Węglowodany: reszta energii. Ogólnorozwojowa."),
-    KETO("Ketogeniczna / Niskowęglowodanowa", "Białko: 2.0g/kg, Węglowodany: do 40g, Tłuszcze: reszta energii (ok. 70%+)."),
-    HIGH_PROTEIN("Wysokobiałkowa (Sportowa)", "Białko: 2.5g/kg, Tłuszcze: 20%, Węglowodany: reszta (Dla budujących mięśnie)."),
-    LOW_FAT("Niskotłuszczowa", "Białko: 2.0g/kg, Tłuszcze: 15%, Węglowodany: reszta (Wspomaga wydolność tlenową).")
-}
-
-enum class ActivityLevel(val multiplier: Double, val displayName: String, val detailedDesc: String) {
-    SEDENTARY(1.2, "Brak aktywności (Siedzący)", "Praca przy biurku, brak planowanych treningów"),
-    LIGHTLY_ACTIVE(1.375, "Niska aktywność (1-2 tren/tyg)", "Spacery, lekki sport raz lub dwa razy w tygodniu"),
-    MODERATELY_ACTIVE(1.55, "Umiarkowana (3-4 tren/tyg)", "Regularne treningi, umiarkowana aktywność codzienna"),
-    VERY_ACTIVE(1.725, "Wysoka aktywność (5-6 tren/tyg)", "Intensywne treningi prawie codziennie, aktywny tryb życia"),
-    EXTRA_ACTIVE(1.9, "Ekstremalna (Codzienny sport/fizyczna)", "Ciężka praca fizyczna lub codzienne wyczynowe treningi")
-}
-
-enum class FitnessGoal(val deltaCalories: Int, val displayName: String, val detailedDesc: String) {
-    EXTREME_LOSE(-600, "Szybka redukcja (Duży deficyt)", "Szybka utrata masy ciała. Krótkoterminowa, wymagająca skupienia."),
-    LOSE_WEIGHT(-350, "Zdrowa redukcja (Zalecana)", "Bezpieczna i stabilna utrata tkanki tłuszczowej bez utraty mięśni."),
-    MAINTAIN(0, "Utrzymanie wagi (Zero)", "Utrzymanie obecnej masy ciała, stabilizacja i regeneracja."),
-    LEAN_GAIN(200, "Powolna masa (Lean Bulk)", "Konstruktywna budowa mięśni przy minimalnym przyroście tłuszczu."),
-    GAIN_WEIGHT(450, "Szybka masa (Nadwyżka)", "Maksymalny rozwój siły i masy mięśniowej z nadwyżką energii.")
-}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,249 +70,1255 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetabolicCalculatorScreen(modifier: Modifier = Modifier) {
-    // Reactive State
-    var gender by rememberSaveable { mutableStateOf(Gender.MALE) }
-    var age by rememberSaveable { mutableStateOf(28) }
-    var height by rememberSaveable { mutableStateOf(175f) }
-    var weight by rememberSaveable { mutableStateOf(75f) }
-    var activityLevel by rememberSaveable { mutableStateOf(ActivityLevel.MODERATELY_ACTIVE) }
-    var fitnessGoal by rememberSaveable { mutableStateOf(FitnessGoal.MAINTAIN) }
-    var bmrFormula by rememberSaveable { mutableStateOf(BmrFormula.MIFFLIN_ST_JEOR) }
-    var dietType by rememberSaveable { mutableStateOf(DietType.BALANCED) }
-    var bodyFatPercent by rememberSaveable { mutableStateOf(20f) }
-    
-    // Explanation card collapse status
-    var showExplanation by remember { mutableStateOf(false) }
+    val viewModel: MetabolicViewModel = viewModel()
+    val context = LocalContext.current
 
-    // Computations using selected Formula
-    val bmr = when (bmrFormula) {
-        BmrFormula.MIFFLIN_ST_JEOR -> {
-            if (gender == Gender.MALE) {
-                (10f * weight) + (6.25f * height) - (5f * age) + 5f
-            } else {
-                (10f * weight) + (6.25f * height) - (5f * age) - 161f
-            }
-        }
-        BmrFormula.KATCH_MCARDLE -> {
-            val lbm = weight * (1f - (bodyFatPercent / 100f))
-            370f + (21.6f * lbm)
-        }
-        BmrFormula.HARRIS_BENEDICT -> {
-            if (gender == Gender.MALE) {
-                66.473f + (13.7516f * weight) + (5.0033f * height) - (6.755f * age)
-            } else {
-                655.0955f + (9.5634f * weight) + (1.8496f * height) - (4.6756f * age)
-            }
-        }
-    }
+    // Stan bieżącej zakładki
+    var selectedTab by rememberSaveable { mutableStateOf(0) } // 0 = Dziennik Diety, 1 = Twój Profil i Parametry
 
-    val tdee = bmr * activityLevel.multiplier.toFloat()
-    val targetCalories = maxOf(1200f, tdee + fitnessGoal.deltaCalories) // Safe calorie floor
+    // Stan dialogów dodawania produktów i skanera
+    var showScannerDialog by remember { mutableStateOf(false) }
+    var showAddCustomProductDialog by remember { mutableStateOf(false) }
 
-    // Macro breakdowns:
-    val proteinGrams: Int
-    val proteinKcal: Int
-    val fatGrams: Int
-    val fatKcal: Int
-    val carbsGrams: Int
-    val carbsKcal: Int
+    // Zbieramy dane z ViewModel
+    val todayMeals by viewModel.todayMeals.collectAsState()
 
-    when (dietType) {
-        DietType.BALANCED -> {
-            proteinGrams = (weight * 2.0f).roundToInt()
-            proteinKcal = proteinGrams * 4
-            fatKcal = (targetCalories * 0.25f).roundToInt()
-            fatGrams = (fatKcal / 9f).roundToInt()
-            val remainingKcal = maxOf(0f, targetCalories - (proteinKcal + fatKcal))
-            carbsGrams = (remainingKcal / 4f).roundToInt()
-            carbsKcal = carbsGrams * 4
-        }
-        DietType.KETO -> {
-            proteinGrams = (weight * 2.0f).roundToInt()
-            proteinKcal = proteinGrams * 4
-            carbsGrams = 40
-            carbsKcal = carbsGrams * 4
-            val remainingKcal = maxOf(0f, targetCalories - (proteinKcal + carbsKcal))
-            fatKcal = remainingKcal.roundToInt()
-            fatGrams = (fatKcal / 9f).roundToInt()
-        }
-        DietType.HIGH_PROTEIN -> {
-            proteinGrams = (weight * 2.5f).roundToInt()
-            proteinKcal = proteinGrams * 4
-            fatKcal = (targetCalories * 0.20f).roundToInt()
-            fatGrams = (fatKcal / 9f).roundToInt()
-            val remainingKcal = maxOf(0f, targetCalories - (proteinKcal + fatKcal))
-            carbsGrams = (remainingKcal / 4f).roundToInt()
-            carbsKcal = carbsGrams * 4
-        }
-        DietType.LOW_FAT -> {
-            proteinGrams = (weight * 2.0f).roundToInt()
-            proteinKcal = proteinGrams * 4
-            fatKcal = (targetCalories * 0.15f).roundToInt()
-            fatGrams = (fatKcal / 9f).roundToInt()
-            val remainingKcal = maxOf(0f, targetCalories - (proteinKcal + fatKcal))
-            carbsGrams = (remainingKcal / 4f).roundToInt()
-            carbsKcal = carbsGrams * 4
-        }
-    }
+    // Szybkie statystyki
+    val consumedCal = viewModel.totalConsumedCalories
+    val consumedProt = viewModel.totalConsumedProtein
+    val consumedFat = viewModel.totalConsumedFat
+    val consumedCarb = viewModel.totalConsumedCarbs
 
-    val totalCalculatedKcal = proteinKcal + fatKcal + carbsKcal
+    val targetCal = viewModel.targetCalories
+    val targetProt = viewModel.targetProteinGrams
+    val targetFat = viewModel.targetFatGrams
+    val targetCarb = viewModel.targetCarbsGrams
 
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // App Header
+        // Górny pasek aplikacji z Logo i Nazwą
         AppHeader()
 
-        // Primary Dynamic Result Dial Card
-        ResultCard(
-            targetCalories = targetCalories.roundToInt(),
-            bmr = bmr.roundToInt(),
-            tdee = tdee.roundToInt(),
-            goal = fitnessGoal
-        )
-
-        // Macronutrients Visual Card
-        MacrosCard(
-            proteinGrams = proteinGrams,
-            proteinKcal = proteinKcal,
-            fatGrams = fatGrams,
-            fatKcal = fatKcal,
-            carbsGrams = carbsGrams,
-            carbsKcal = carbsKcal,
-            totalKcal = totalCalculatedKcal
-        )
-
-        // Form Title
-        Text(
-            text = "Twoja Metryka i Cel",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Start
-        )
-
-        // Gender Selection
-        GenderSelector(
-            selectedGender = gender,
-            onGenderSelected = { gender = it }
-        )
-
-        // Formuła BMR
-        DropdownSelectorCard(
-            title = "Metoda obliczania BMR",
-            value = bmrFormula.displayName,
-            description = bmrFormula.detailedDesc,
-            icon = Icons.Default.Settings,
-            options = BmrFormula.values().map { it.displayName },
-            optionDescriptions = BmrFormula.values().map { it.detailedDesc },
-            onOptionSelected = { selectedName ->
-                BmrFormula.values().find { it.displayName == selectedName }?.let {
-                    bmrFormula = it
-                }
+        // Przełącznik zakładek (Tabs) o nowoczesnym wyglądzie
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.primary,
+            indicator = { tabPositions ->
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
-        )
-
-        // Conditional Body Fat slider for Katch-McArdle Formula
-        AnimatedVisibility(
-            visible = bmrFormula == BmrFormula.KATCH_MCARDLE,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
         ) {
-            MetricSliderCard(
-                title = "Poziom tkanki tłuszczowej",
-                value = bodyFatPercent,
-                valueRange = 5f..50f,
-                suffix = "%",
-                icon = Icons.Default.FavoriteBorder,
-                onValueChange = { bodyFatPercent = it }
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.List,
+                            contentDescription = "Zakładka Dziennik",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Dziennik Diety", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Zakładka Profil i Kalkulator",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Profil i Kalkulator", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
             )
         }
 
-        // Metrics Input Cards
-        MetricSliderCard(
-            title = "Wiek",
-            value = age.toFloat(),
-            valueRange = 15f..90f,
-            suffix = "lat",
-            icon = Icons.Default.DateRange,
-            onValueChange = { age = it.roundToInt() }
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            if (selectedTab == 0) {
+                // ---- ZAKŁADKA 0: DZIENNIK DIETY & BAZA PRODUKTÓW ----
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 1. Karda Podsumowania Kalorii (Cel - Zjedzone = Pozostało)
+                    DailyCalorieBalanceCard(
+                        targetCal = targetCal,
+                        consumedCal = consumedCal.roundToInt(),
+                        goal = viewModel.fitnessGoal
+                    )
 
-        MetricSliderCard(
-            title = "Wzrost",
-            value = height,
-            valueRange = 130f..220f,
-            suffix = "cm",
-            icon = Icons.Default.Info,
-            onValueChange = { height = it }
-        )
+                    // 2. Karta Postępu Makroskładników w czasie rzeczywistym
+                    DailyMacrosProgressCard(
+                        consumedProt = consumedProt.roundToInt(),
+                        targetProt = targetProt,
+                        consumedFat = consumedFat.roundToInt(),
+                        targetFat = targetFat,
+                        consumedCarb = consumedCarb.roundToInt(),
+                        targetCarb = targetCarb
+                    )
 
-        MetricSliderCard(
-            title = "Masa ciała",
-            value = weight,
-            valueRange = 40f..150f,
-            suffix = "kg",
-            icon = Icons.Default.Star,
-            onValueChange = { weight = it }
-        )
+                    // 3. Przyciski akcji: Skanowanie kodu EAN / Dodawanie własne
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = { showScannerDialog = true },
+                            modifier = Modifier.weight(1.2f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QrCodeScanner,
+                                contentDescription = "Skanuj ean"
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Skanuj / Kod EAN", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
 
-        // Dropdown Parameter Selectors
-        DropdownSelectorCard(
-            title = "Poziom aktywności dobowej",
-            value = activityLevel.displayName,
-            description = activityLevel.detailedDesc,
-            icon = Icons.Default.PlayArrow,
-            options = ActivityLevel.values().map { it.displayName },
-            optionDescriptions = ActivityLevel.values().map { it.detailedDesc },
-            onOptionSelected = { selectedName ->
-                ActivityLevel.values().find { it.displayName == selectedName }?.let {
-                    activityLevel = it
+                        OutlinedButton(
+                            onClick = { showAddCustomProductDialog = true },
+                            modifier = Modifier.weight(0.8f),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Dodaj własny",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Ręczny wpis", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+
+                    // 4. Lista zjedzonych posiłków dzisiaj
+                    Text(
+                        text = "Dzisiejsze posiłki",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+
+                    if (todayMeals.isEmpty()) {
+                        // Empty State z zachęcającym tekstem i ikoną
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MenuBook,
+                                    contentDescription = "Brak posiłków",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Text(
+                                    text = "Dziennik posiłków jest pusty",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    text = "Dodaj produkty za pomocą skanera kodu kreskowego lub ręcznie, aby zobaczyć bilans i bilansować makroskładniki.",
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    } else {
+                        // Lista posiłków
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            todayMeals.forEach { meal ->
+                                MealLogItem(
+                                    meal = meal,
+                                    onDeleteClick = {
+                                        viewModel.removeMealEntry(meal.id)
+                                        Toast.makeText(context, "Usunięto ${meal.name}", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Przycisk wyczyszczenia wszystkiego
+                            TextButton(
+                                onClick = {
+                                    viewModel.clearToday()
+                                    Toast.makeText(context, "Wyczyszczono dzisiejszy dziennik", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.align(Alignment.End),
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.DeleteForever, contentDescription = "Wyczyść dzień")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Wyczyść dzisiejszy dziennik", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            } else {
+                // ---- ZAKŁADKA 1: PROFIL I PARAMETRY METABOLICZNE (Dotychczasowy Kalkulator) ----
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // TDEE and BMR results visualizer card
+                    ResultCard(
+                        targetCalories = targetCal,
+                        bmr = viewModel.bmr.roundToInt(),
+                        tdee = viewModel.tdee.roundToInt(),
+                        goal = viewModel.fitnessGoal
+                    )
+
+                    // Macro breakdown suggestion
+                    MacrosCard(
+                        proteinGrams = targetProt,
+                        proteinKcal = targetProt * 4,
+                        fatGrams = targetFat,
+                        fatKcal = targetFat * 9,
+                        carbsGrams = targetCarb,
+                        carbsKcal = targetCarb * 4,
+                        totalKcal = targetCal
+                    )
+
+                    Text(
+                        text = "Twoja Metryka i Cel",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start
+                    )
+
+                    // Wybór płci
+                    GenderSelector(
+                        selectedGender = viewModel.gender,
+                        onGenderSelected = { viewModel.gender = it }
+                    )
+
+                    // Wybór Formuły BMR
+                    DropdownSelectorCard(
+                        title = "Metoda obliczania BMR",
+                        value = viewModel.bmrFormula.displayName,
+                        description = viewModel.bmrFormula.detailedDesc,
+                        icon = Icons.Default.Settings,
+                        options = BmrFormula.values().map { it.displayName },
+                        optionDescriptions = BmrFormula.values().map { it.detailedDesc },
+                        onOptionSelected = { selectedName ->
+                            BmrFormula.values().find { it.displayName == selectedName }?.let {
+                                viewModel.bmrFormula = it
+                            }
+                        }
+                    )
+
+                    // Conditional Body Fat slider for Katch-McArdle Formula
+                    AnimatedVisibility(
+                        visible = viewModel.bmrFormula == BmrFormula.KATCH_MCARDLE,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        MetricSliderCard(
+                            title = "Poziom tkanki tłuszczowej",
+                            value = viewModel.bodyFatPercent,
+                            valueRange = 5f..50f,
+                            suffix = "%",
+                            icon = Icons.Default.FavoriteBorder,
+                            onValueChange = { viewModel.bodyFatPercent = it }
+                        )
+                    }
+
+                    // Suwaki parametrów fizycznych
+                    MetricSliderCard(
+                        title = "Wiek",
+                        value = viewModel.age.toFloat(),
+                        valueRange = 15f..90f,
+                        suffix = "lat",
+                        icon = Icons.Default.DateRange,
+                        onValueChange = { viewModel.age = it.roundToInt() }
+                    )
+
+                    MetricSliderCard(
+                        title = "Wzrost",
+                        value = viewModel.height,
+                        valueRange = 130f..220f,
+                        suffix = "cm",
+                        icon = Icons.Default.Info,
+                        onValueChange = { viewModel.height = it }
+                    )
+
+                    MetricSliderCard(
+                        title = "Masa ciała",
+                        value = viewModel.weight,
+                        valueRange = 40f..150f,
+                        suffix = "kg",
+                        icon = Icons.Default.Star,
+                        onValueChange = { viewModel.weight = it }
+                    )
+
+                    // Dropdowns
+                    DropdownSelectorCard(
+                        title = "Poziom aktywności dobowej",
+                        value = viewModel.activityLevel.displayName,
+                        description = viewModel.activityLevel.detailedDesc,
+                        icon = Icons.Default.PlayArrow,
+                        options = ActivityLevel.values().map { it.displayName },
+                        optionDescriptions = ActivityLevel.values().map { it.detailedDesc },
+                        onOptionSelected = { selectedName ->
+                            ActivityLevel.values().find { it.displayName == selectedName }?.let {
+                                viewModel.activityLevel = it
+                            }
+                        }
+                    )
+
+                    DropdownSelectorCard(
+                        title = "Twój cel dietetyczny",
+                        value = viewModel.fitnessGoal.displayName,
+                        description = viewModel.fitnessGoal.detailedDesc,
+                        icon = Icons.Default.ThumbUp,
+                        options = FitnessGoal.values().map { it.displayName },
+                        optionDescriptions = FitnessGoal.values().map { it.detailedDesc },
+                        onOptionSelected = { selectedName ->
+                            FitnessGoal.values().find { it.displayName == selectedName }?.let {
+                                viewModel.fitnessGoal = it
+                            }
+                        }
+                    )
+
+                    DropdownSelectorCard(
+                        title = "Model diety (rozmieszczenie makroskładników)",
+                        value = viewModel.dietType.displayName,
+                        description = viewModel.dietType.detailedDesc,
+                        icon = Icons.Default.CheckCircle,
+                        options = DietType.values().map { it.displayName },
+                        optionDescriptions = DietType.values().map { it.detailedDesc },
+                        onOptionSelected = { selectedName ->
+                            DietType.values().find { it.displayName == selectedName }?.let {
+                                viewModel.dietType = it
+                            }
+                        }
+                    )
+
+                    // Podręcznik objaśnień (Knowledge expander)
+                    var showExplanation by remember { mutableStateOf(false) }
+                    EducationalExpander(
+                        isExpanded = showExplanation,
+                        onToggle = { showExplanation = !showExplanation }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
-        )
+        }
+    }
 
-        DropdownSelectorCard(
-            title = "Twój cel dietetyczny",
-            value = fitnessGoal.displayName,
-            description = fitnessGoal.detailedDesc,
-            icon = Icons.Default.ThumbUp,
-            options = FitnessGoal.values().map { it.displayName },
-            optionDescriptions = FitnessGoal.values().map { it.detailedDesc },
-            onOptionSelected = { selectedName ->
-                FitnessGoal.values().find { it.displayName == selectedName }?.let {
-                    fitnessGoal = it
+    // ---- DIALOG 1: SKANER KODÓW KRESKOWYCH (INTERAKTYWNA SYMULACJA + POŁĄCZENIE Z OPEN FOOD FACTS API v2) ----
+    if (showScannerDialog) {
+        Dialog(
+            onDismissRequest = {
+                viewModel.clearActiveScan()
+                showScannerDialog = false
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                var barcodeInput by remember { mutableStateOf("") }
+                var selectedPortionGrams by remember { mutableStateOf(100f) }
+                val activeScannedProduct = viewModel.scannedProduct
+
+                // Animacja laserowej linii skanowania
+                val infiniteTransition = rememberInfiniteTransition(label = "laser")
+                val laserOffsetY by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 180f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "laserOffset"
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Nagłówek
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Skaner Kodów EAN",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        IconButton(onClick = {
+                            viewModel.clearActiveScan()
+                            showScannerDialog = false
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Zamknij skaner")
+                        }
+                    }
+
+                    if (activeScannedProduct == null) {
+                        // Skaner jest w trybie celownika
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .background(Color.Black, RoundedCornerShape(16.dp))
+                                .border(
+                                    2.dp,
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    RoundedCornerShape(16.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Grafika Celownika / Ramki skanera
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 240.dp, height = 120.dp)
+                                    .border(2.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                            ) {
+                                // Czerwona linia lasera
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .offset(y = laserOffsetY.dp)
+                                        .background(Color.Red)
+                                )
+                            }
+
+                            // Loading Overlay
+                            if (viewModel.isSearchingProduct) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.5f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                }
+                            } else {
+                                Text(
+                                    text = "Skieruj aparat na kod lub wpisz poniżej",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 8.dp),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        // Informacja o błędzie jeśli nie znaleziono kodu
+                        viewModel.errorMessage?.let { error ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = error,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(12.dp),
+                                    textAlign = TextAlign.Center,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        // Ręczne wpisanie kodu EAN-13
+                        OutlinedTextField(
+                            value = barcodeInput,
+                            onValueChange = { if (it.length <= 15) barcodeInput = it },
+                            label = { Text("Wpisz kod kreskowy (EAN)") },
+                            trailingIcon = {
+                                if (barcodeInput.isNotEmpty()) {
+                                    IconButton(onClick = { barcodeInput = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Wyczyść tekst")
+                                    }
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = "Ikona wprowadzania")
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (barcodeInput.trim().isNotEmpty()) {
+                                        viewModel.queryBarcode(barcodeInput)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = barcodeInput.trim().isNotEmpty() && !viewModel.isSearchingProduct,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Szukaj w bazie Open Food Facts", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                        // Przycisk-skróty dla użytkowników emulatora bez fizycznego aparatu
+                        Text(
+                            text = "Brak fizycznego kodu? Wypróbuj demonstracyjne skanowanie (klienci chętnie klikają):",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // Demo 1: Nutella
+                            DemoProductChip(
+                                name = "Nutella Krem 350g",
+                                brand = "Ferrero",
+                                code = "3017620422003",
+                                onClick = {
+                                    barcodeInput = "3017620422003"
+                                    viewModel.queryBarcode("3017620422003")
+                                }
+                            )
+                            // Demo 2: Coca-Cola
+                            DemoProductChip(
+                                name = "Coca-Cola oryginalna puszka",
+                                brand = "The Coca-Cola Company",
+                                code = "5900511100147",
+                                onClick = {
+                                    barcodeInput = "5900511100147"
+                                    viewModel.queryBarcode("5900511100147")
+                                }
+                            )
+                            // Demo 3: Pringles Sour Cream
+                            DemoProductChip(
+                                name = "Pringles Śmietana i Cebula",
+                                brand = "Pringles",
+                                code = "5053990138722",
+                                onClick = {
+                                    barcodeInput = "5053990138722"
+                                    viewModel.queryBarcode("5053990138722")
+                                }
+                            )
+                            // Demo 4: Pierś z Kurczaka (lokalna)
+                            DemoProductChip(
+                                name = "Pierś z piersi kurczaka",
+                                brand = "Wbudowana baza",
+                                code = "1111111111111",
+                                onClick = {
+                                    barcodeInput = "1111111111111"
+                                    viewModel.queryBarcode("1111111111111")
+                                }
+                            )
+                        }
+                    } else {
+                        // Skanowanie powiodło się, prezentujemy kartę zjedzonego produktu
+                        Text(
+                            text = "🎉 Produkt znaleziony!",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        // Główna karta produktu
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // Zdjęcie produktu za pomocą Coil
+                                activeScannedProduct.imageUrl?.let { imgUrl ->
+                                    AsyncImage(
+                                        model = imgUrl,
+                                        contentDescription = "Zdjęcie produktu",
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color.White)
+                                    )
+                                } ?: Icon(
+                                    imageVector = Icons.Default.Fastfood,
+                                    contentDescription = "Domyślna ikona jedzenia",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(64.dp)
+                                )
+
+                                Text(
+                                    text = activeScannedProduct.name,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                activeScannedProduct.brand?.let { b ->
+                                    Text(
+                                        text = b,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+
+                                Text(
+                                    text = "Wartości odżywcze na 100g:",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                // Siatka makroskładników na 100g
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    NutrientMiniStat(name = "Kcal", value = "${activeScannedProduct.caloriesPer100g.roundToInt()}", color = MaterialTheme.colorScheme.primary)
+                                    NutrientMiniStat(name = "Białko", value = "${activeScannedProduct.proteinPer100g}g", color = ProteinColor)
+                                    NutrientMiniStat(name = "Tłuszcze", value = "${activeScannedProduct.fatPer100g}g", color = FatsColor)
+                                    NutrientMiniStat(name = "Węglowodany", value = "${activeScannedProduct.carbsPer100g}g", color = CarbsColor)
+                                }
+                            }
+                        }
+
+                        // Sekcja wielkości zjedzonej porcji
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Waga zjedzonej porcji",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "${selectedPortionGrams.roundToInt()} g",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 18.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Slider(
+                                    value = selectedPortionGrams,
+                                    valueRange = 10f..1000f,
+                                    onValueChange = { selectedPortionGrams = it }
+                                )
+
+                                // Szybkie przyciski wyboru wagi porcji
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    listOf(50f, 100f, 150f, 250f, 500f).forEach { g ->
+                                        OutlinedButton(
+                                            onClick = { selectedPortionGrams = g },
+                                            modifier = Modifier.weight(1f),
+                                            contentPadding = PaddingValues(0.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text("${g.roundToInt()}g", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Dodanie do bilansu
+                        Button(
+                            onClick = {
+                                viewModel.logMeal(activeScannedProduct, selectedPortionGrams.toDouble())
+                                Toast.makeText(context, "Zapisano ${activeScannedProduct.name} (${selectedPortionGrams.roundToInt()}g)!", Toast.LENGTH_SHORT).show()
+                                showScannerDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = "Dodaj posiłek")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Dodaj do dzisiejszego bilansu", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+
+                        // Przycisk wstecz
+                        TextButton(
+                            onClick = { viewModel.clearActiveScan() }
+                        ) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Wróć do skanowania")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Skanuj inny produkt", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
-        )
+        }
+    }
 
-        DropdownSelectorCard(
-            title = "Model diety (rozmieszczenie makroskładników)",
-            value = dietType.displayName,
-            description = dietType.detailedDesc,
-            icon = Icons.Default.CheckCircle,
-            options = DietType.values().map { it.displayName },
-            optionDescriptions = DietType.values().map { it.detailedDesc },
-            onOptionSelected = { selectedName ->
-                DietType.values().find { it.displayName == selectedName }?.let {
-                    dietType = it
+    // ---- DIALOG 2: RĘCZNE DODAJ WŁASNY PRODUKT ----
+    if (showAddCustomProductDialog) {
+        Dialog(
+            onDismissRequest = { showAddCustomProductDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                var cName by remember { mutableStateOf("") }
+                var cBrand by remember { mutableStateOf("") }
+                var cCalories by remember { mutableStateOf("") }
+                var cProtein by remember { mutableStateOf("") }
+                var cFat by remember { mutableStateOf("") }
+                var cCarbs by remember { mutableStateOf("") }
+                var cWeight by remember { mutableStateOf("150") }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Ręczne dodanie posiłku",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        IconButton(onClick = { showAddCustomProductDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Zamknij")
+                        }
+                    }
+
+                    Text(
+                        text = "Wypełnij parametry produktu spożywczego na 100g, a także wagę zjedzonej porcji.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = cName,
+                        onValueChange = { cName = it },
+                        label = { Text("Nazwa posiłku / produktu (np. Banan, Obiad)") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = cBrand,
+                        onValueChange = { cBrand = it },
+                        label = { Text("Marka / Restauracja (opcjonalnie)") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Wartosci odzywcze
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = cCalories,
+                            onValueChange = { cCalories = it },
+                            label = { Text("Kcal na 100g") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = cWeight,
+                            onValueChange = { cWeight = it },
+                            label = { Text("Waga porcji (g)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = cProtein,
+                            onValueChange = { cProtein = it },
+                            label = { Text("Białko/100g") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = cFat,
+                            onValueChange = { cFat = it },
+                            label = { Text("Tłuszcz/100g") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = cCarbs,
+                            onValueChange = { cCarbs = it },
+                            label = { Text("Węglowodany/100g") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            val caloriesVal = cCalories.toDoubleOrNull() ?: 0.0
+                            val proteinVal = cProtein.toDoubleOrNull() ?: 0.0
+                            val fatVal = cFat.toDoubleOrNull() ?: 0.0
+                            val carbsVal = cCarbs.toDoubleOrNull() ?: 0.0
+                            val portionGrams = cWeight.toDoubleOrNull() ?: 150.0
+
+                            if (cName.trim().isEmpty()) {
+                                Toast.makeText(context, "Podaj nazwę produktu!", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            viewModel.addNewCustomProductAndLog(
+                                name = cName,
+                                brand = cBrand,
+                                calories = caloriesVal,
+                                protein = proteinVal,
+                                fat = fatVal,
+                                carbs = carbsVal,
+                                portionGrams = portionGrams
+                            )
+
+                            Toast.makeText(context, "Dodano własny posiłek: $cName!", Toast.LENGTH_SHORT).show()
+                            showAddCustomProductDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = "Zapisz")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Zapisz w dzienniku posiłków", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
                 }
             }
-        )
+        }
+    }
+}
 
-        // Knowledge Expander
-        EducationalExpander(
-            isExpanded = showExplanation,
-            onToggle = { showExplanation = !showExplanation }
-        )
+// Komponent 1: Chip dla demo produktów
+@Composable
+fun DemoProductChip(
+    name: String,
+    brand: String,
+    code: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(0.12f)),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Fastfood,
+                contentDescription = "Demo produkt",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text("$brand • Kod EAN: $code", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            }
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = "Wybierz",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
 
-        Spacer(modifier = Modifier.height(24.dp))
+// Komponent 2: Statystka odżywcza w małym kwadracie
+@Composable
+fun NutrientMiniStat(
+    name: String,
+    value: String,
+    color: Color
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = name, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(text = value, fontSize = 13.sp, fontWeight = FontWeight.Black, color = color)
+        }
+    }
+}
+
+// Komponent 3: Podsumowanie bilansu kalorycznego
+@Composable
+fun DailyCalorieBalanceCard(
+    targetCal: Int,
+    consumedCal: Int,
+    goal: FitnessGoal
+) {
+    val remainingCalStr = (targetCal - consumedCal).toString()
+    val isOverLimit = (targetCal - consumedCal) < 0
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "TWÓJ BILANS DOBOWY",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.5.sp
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Cel
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("$targetCal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text("Limity (Cel)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                }
+
+                // Operator minus
+                Text("-", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+
+                // Zjedzone
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("$consumedCal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Spożyte", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                }
+
+                // Operator równa się
+                Text("=", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+
+                // Pozostało
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (isOverLimit) "Nadwyżka $remainingCalStr" else "$remainingCalStr",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isOverLimit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
+                    )
+                    Text("Pozostało", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                }
+            }
+
+            SuggestionBadge(goal)
+        }
+    }
+}
+
+// Komponent 4: Postęp Makroskładników
+@Composable
+fun DailyMacrosProgressCard(
+    consumedProt: Int,
+    targetProt: Int,
+    consumedFat: Int,
+    targetFat: Int,
+    consumedCarb: Int,
+    targetCarb: Int
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "Wykorzystanie Makroskładników",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            // Białko
+            MacroProgressBarRow(
+                name = "Białko",
+                consumed = consumedProt,
+                target = targetProt,
+                color = ProteinColor
+            )
+
+            // Tłuszcze
+            MacroProgressBarRow(
+                name = "Tłuszcze",
+                consumed = consumedFat,
+                target = targetFat,
+                color = FatsColor
+            )
+
+            // Węglowodany
+            MacroProgressBarRow(
+                name = "Węglowodany",
+                consumed = consumedCarb,
+                target = targetCarb,
+                color = CarbsColor
+            )
+        }
+    }
+}
+
+// Komponent pomocniczy paska postępu makro
+@Composable
+fun MacroProgressBarRow(
+    name: String,
+    consumed: Int,
+    target: Int,
+    color: Color
+) {
+    val progress = if (target > 0) consumed / target.toFloat() else 0f
+    val displayProgress = progress.coerceIn(0f, 1f)
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            Text(
+                text = "$consumed / $target g",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                color = color
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(displayProgress)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+    }
+}
+
+// Komponent 5: Karta wpisu na liście obiadów/posiłków
+@Composable
+fun MealLogItem(
+    meal: MealEntryEntity,
+    onDeleteClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Ikona jedzenia
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Fastfood,
+                    contentDescription = "Posiłek",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = meal.name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${meal.brand ?: "Różne marki EAN"} • ${meal.weightGrams.roundToInt()}g",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("B: ${meal.protein.roundToInt()}g", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = ProteinColor)
+                    Text("T: ${meal.fat.roundToInt()}g", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = FatsColor)
+                    Text("W: ${meal.carbs.roundToInt()}g", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbsColor)
+                }
+            }
+
+            // Kaloryczność i przycisk usuwania porcji
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "${meal.calories.roundToInt()} kcal",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Usuń posiłek",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -343,13 +1327,14 @@ fun AppHeader() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(36.dp)
                 .background(
                     brush = Brush.linearGradient(
                         colors = listOf(
@@ -357,28 +1342,28 @@ fun AppHeader() {
                             MaterialTheme.colorScheme.secondary
                         )
                     ),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(8.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Favorite,
-                contentDescription = "Fit Flame Logo",
+                contentDescription = "Metabolix Logo",
                 tint = Color.White,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Column {
             Text(
                 text = "Metabolix",
-                fontSize = 22.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Kalkulator zapotrzebowania kalorycznego",
-                fontSize = 11.sp,
+                text = "Kalkulator zapotrzebowania i dziennik diety EAN",
+                fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 fontWeight = FontWeight.SemiBold
             )
@@ -553,7 +1538,7 @@ fun SuggestionBadge(goal: FitnessGoal) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = description,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -634,7 +1619,7 @@ fun MacrosCard(
             ) {
                 MacroRowItem(
                     name = "Białko",
-                    subtitle = "Budulec mięśni, regeneracja i sytość (2.0g/kg)",
+                    subtitle = "Budulec mięśni, regeneracja i sytość",
                     grams = proteinGrams,
                     kcal = proteinKcal,
                     barColor = ProteinColor,
@@ -643,7 +1628,7 @@ fun MacrosCard(
 
                 MacroRowItem(
                     name = "Tłuszcze",
-                    subtitle = "Gospodarka hormonalna i energia (25%)",
+                    subtitle = "Gospodarka hormonalna i energia",
                     grams = fatGrams,
                     kcal = fatKcal,
                     barColor = FatsColor,
