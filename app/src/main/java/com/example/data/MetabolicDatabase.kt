@@ -33,6 +33,14 @@ data class MealEntryEntity(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+// 2b. Entity: Wpis wody (Log wypitej wody)
+@Entity(tableName = "water_entries")
+data class WaterEntryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val amountMl: Int,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 // 3. DAO: Dostęp do danych
 @Dao
 interface MetabolicDao {
@@ -61,10 +69,23 @@ interface MetabolicDao {
 
     @Query("DELETE FROM meal_entries")
     suspend fun clearAllMealEntries()
+
+    // Logi wody
+    @Query("SELECT * FROM water_entries WHERE timestamp >= :startOfDay AND timestamp <= :endOfDay ORDER BY timestamp DESC")
+    fun getWaterEntriesForDayFlow(startOfDay: Long, endOfDay: Long): Flow<List<WaterEntryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWaterEntry(entry: WaterEntryEntity)
+
+    @Query("DELETE FROM water_entries WHERE id = :id")
+    suspend fun deleteWaterEntry(id: Int)
+
+    @Query("DELETE FROM water_entries")
+    suspend fun clearAllWaterEntries()
 }
 
 // 4. Database definition
-@Database(entities = [ProductEntity::class, MealEntryEntity::class], version = 1, exportSchema = false)
+@Database(entities = [ProductEntity::class, MealEntryEntity::class, WaterEntryEntity::class], version = 2, exportSchema = false)
 abstract class MetabolicDatabase : RoomDatabase() {
     abstract fun dao(): MetabolicDao
 

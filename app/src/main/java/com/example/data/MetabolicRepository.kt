@@ -124,6 +124,43 @@ class MetabolicRepository(
         dao.clearAllMealEntries()
     }
 
+    // Pobiera wpisy wody z aktualnego dnia
+    fun getWaterEntriesForToday(): Flow<List<WaterEntryEntity>> {
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val startOfDay = calendar.timeInMillis
+
+        calendar.set(Calendar.HOUR_OF_DAY, 23)
+        calendar.set(Calendar.MINUTE, 59)
+        calendar.set(Calendar.SECOND, 59)
+        calendar.set(Calendar.MILLISECOND, 999)
+        val endOfDay = calendar.timeInMillis
+
+        return dao.getWaterEntriesForDayFlow(startOfDay, endOfDay)
+    }
+
+    // Zapis wpisu wypitej wody
+    suspend fun logWater(amountMl: Int) = withContext(Dispatchers.IO) {
+        val entry = WaterEntryEntity(
+            amountMl = amountMl,
+            timestamp = System.currentTimeMillis()
+        )
+        dao.insertWaterEntry(entry)
+    }
+
+    // Usuwanie wpisu wody
+    suspend fun removeWaterEntry(id: Int) = withContext(Dispatchers.IO) {
+        dao.deleteWaterEntry(id)
+    }
+
+    // Czyszczenie wody na dziś
+    suspend fun clearTodayWaterLog() = withContext(Dispatchers.IO) {
+        dao.clearAllWaterEntries()
+    }
+
     // Wstrzyknięcie domyślnej mini-bazy produktów (seed) jeśli tabela jest pusta,
     // zawierającej również popularne kody kreskowe (EAN) dla ułatwienia testowania.
     suspend fun seedDatabaseIfEmpty() = withContext(Dispatchers.IO) {

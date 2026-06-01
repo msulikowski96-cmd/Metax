@@ -34,6 +34,14 @@ class MetabolicViewModel(application: Application) : AndroidViewModel(applicatio
             initialValue = emptyList()
         )
 
+    // Reaktywna lista wypitej wody na dziś
+    val todayWater: StateFlow<List<WaterEntryEntity>> = repository.getWaterEntriesForToday()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Dane użytkownika do obliczeń metabolicznych (pamiętane w sesji lub domyślne)
     var gender by mutableStateOf(Gender.MALE)
     var age by mutableStateOf(28)
@@ -222,4 +230,79 @@ class MetabolicViewModel(application: Application) : AndroidViewModel(applicatio
 
     val totalConsumedCarbs: Double
         get() = todayMeals.value.sumOf { it.carbs }
+
+    // Logowanie wypitej wody
+    fun logWater(amountMl: Int) {
+        viewModelScope.launch {
+            repository.logWater(amountMl)
+        }
+    }
+
+    // Usunięcie wpisu wody
+    fun removeWaterEntry(id: Int) {
+        viewModelScope.launch {
+            repository.removeWaterEntry(id)
+        }
+    }
+
+    // Wyczyszczenie wpisów wody z dziś
+    fun clearTodayWater() {
+        viewModelScope.launch {
+            repository.clearTodayWaterLog()
+        }
+    }
+
+    val targetWaterMl: Int
+        get() = (weight * 35f).roundToInt()
+
+    val totalConsumedWaterMl: Int
+        get() = todayWater.value.sumOf { it.amountMl }
+
+    // Obliczenia BMI i pomiary zdrowotne
+    val bmi: Double
+        get() {
+            val hMeter = height / 100.0
+            if (hMeter <= 0.0) return 0.0
+            return weight / (hMeter * hMeter)
+        }
+
+    val bmiCategory: Pair<String, String> // Sformatowany komunikat i kod koloru HEX
+        get() {
+            val v = bmi
+            return when {
+                v < 18.5 -> Pair("Niedowaga", "#FFEB3B")
+                v < 25.0 -> Pair("Waga prawidłowa", "#4CAF50")
+                v < 30.0 -> Pair("Nadwaga", "#FF9800")
+                else -> Pair("Otyłość", "#F44336")
+            }
+        }
+
+    val idealBodyWeight: Double
+        get() {
+            // Wzór Devine dla Idealnej Masy Ciała
+            val inchesOver5Feet = (height / 2.54) - 60.0
+            val base = if (gender == Gender.MALE) 50.0 else 45.5
+            val calculated = base + (2.3 * maxOf(0.0, inchesOver5Feet))
+            return calculated
+        }
+
+    // Kalkulator procentu tkanki tłuszczowej metodą US Navy (dla dopasowania wzoru Katch-McArdle)
+    fun calculateNavyBodyFat(waistCm: Float, neckCm: Float, hipCm: Float?): Float {
+        return if (gender == Gender.MALE) {
+            val valSub = waistCm - neckCm
+            if (valSub <= 1f) return 15f
+            val density = 1.0324f - (0.19106f * kotlin.math.log10(valSub.toDouble())) + (0.15456f * kotlin.math.log10(height.toDouble()))
+            if (density <= 0.0) return 15f
+            val bf = (495f / density) - 450f
+            bf.toFloat().coerceIn(3f, 55f)
+        } else {
+            val hipValue = hipCm ?: 95f
+            val valSub = waistCm + hipValue - neckCm
+            if (valSub <= 1f) return 22f
+            val density = 1.29579f - (0.35004f * kotlin.math.log10(valSub.toDouble())) + (0.22100f * kotlin.math.log10(height.toDouble()))
+            if (density <= 0.0) return 22f
+            val bf = (495f / density) - 450f
+            bf.toFloat().coerceIn(5f, 60f)
+        }
+    }
 }
