@@ -34,3 +34,10 @@ enum class FitnessGoal(val deltaCalories: Int, val displayName: String, val deta
     LEAN_GAIN(200, "Powolna masa (Lean Bulk)", "Konstruktywna budowa mięśni przy minimalnym przyroście tłuszczu."),
     GAIN_WEIGHT(450, "Szybka masa (Nadwyżka)", "Maksymalny rozwój siły i masy mięśniowej z nadwyżką energii.")
 }
+
+enum class CustomGoalType(val displayName: String, val detailedDesc: String) {
+    LOSE("Spersonalizowana redukcja (Utrata wagi)", "Ustaw docelową wagę i pożądane tempo chudnięcia."),
+    GAIN("Spersonalizowana masa (Zwiększenie wagi)", "Ustaw docelową wagę i pożądane tempo przyrostu masy ciała."),
+    MAINTAIN("Utrzymanie obecnej wagi", "Zrównoważona kaloryczność na poziomie Twojego CPM (TDEE).")
+}
+

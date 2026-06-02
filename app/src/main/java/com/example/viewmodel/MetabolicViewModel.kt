@@ -52,6 +52,12 @@ class MetabolicViewModel(application: Application) : AndroidViewModel(applicatio
     var bmrFormula by mutableStateOf(BmrFormula.MIFFLIN_ST_JEOR)
     var dietType by mutableStateOf(DietType.BALANCED)
     var bodyFatPercent by mutableStateOf(20f)
+    
+    // Spersonalizowane cele wagowe
+    var isCustomGoalEnabled by mutableStateOf(false)
+    var customGoalType by mutableStateOf(CustomGoalType.LOSE)
+    var customTargetWeight by mutableStateOf(70f)
+    var customWeeklyRate by mutableStateOf(0.5f) // w kg na tydzień
 
     // Stan UI dotyczący pobierania kodów kreskowych
     var scannedProduct by mutableStateOf<ProductEntity?>(null)
@@ -97,7 +103,27 @@ class MetabolicViewModel(application: Application) : AndroidViewModel(applicatio
 
     // Docelowe dziennie kalorie (uwzględniające cel i poziom bezpieczeństwa)
     val targetCalories: Int
-        get() = maxOf(1200.0, tdee + fitnessGoal.deltaCalories).roundToInt()
+        get() {
+            val delta = if (isCustomGoalEnabled) {
+                when (customGoalType) {
+                    CustomGoalType.LOSE -> -customWeeklyRate * 1100f
+                    CustomGoalType.GAIN -> customWeeklyRate * 1100f
+                    CustomGoalType.MAINTAIN -> 0f
+                }
+            } else {
+                fitnessGoal.deltaCalories.toFloat()
+            }
+            return maxOf(1200.0, tdee + delta).roundToInt()
+        }
+
+    // Prognoza czasu osiągnięcia celu (w tygodniach)
+    val customGoalWeeksToTarget: Double?
+        get() {
+            if (!isCustomGoalEnabled || customGoalType == CustomGoalType.MAINTAIN) return null
+            if (customWeeklyRate <= 0.01f) return null
+            val diff = kotlin.math.abs(weight - customTargetWeight)
+            return diff.toDouble() / customWeeklyRate
+        }
 
     // Wyznaczenie docelowych limitów makroskładników na podstawie wybranego typu diety
     val targetProteinGrams: Int

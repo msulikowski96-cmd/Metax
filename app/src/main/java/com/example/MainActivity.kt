@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -426,6 +427,176 @@ fun MetabolicCalculatorScreen(modifier: Modifier = Modifier) {
                             }
                         }
                     )
+
+                    // ---- SPERSANALIZOWANY CEL WAGOWY ----
+                    Card(
+                        modifier = Modifier.fillMaxWidth().testTag("custom_weight_goal_card"),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.5.dp, if (viewModel.isCustomGoalEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "Spersonalizowany cel",
+                                        tint = if (viewModel.isCustomGoalEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "Metryczny Cel Wagowy",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Precyzyjne tempo chudnięcia / masy",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = viewModel.isCustomGoalEnabled,
+                                    onCheckedChange = { viewModel.isCustomGoalEnabled = it },
+                                    modifier = Modifier.testTag("custom_goal_toggle")
+                                )
+                            }
+
+                            AnimatedVisibility(
+                                visible = viewModel.isCustomGoalEnabled,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+
+                                    DropdownSelectorCard(
+                                        title = "Rodzaj dążenia wagowego",
+                                        value = viewModel.customGoalType.displayName,
+                                        description = viewModel.customGoalType.detailedDesc,
+                                        icon = Icons.Default.Check,
+                                        options = CustomGoalType.values().map { it.displayName },
+                                        optionDescriptions = CustomGoalType.values().map { it.detailedDesc },
+                                        onOptionSelected = { selectedName ->
+                                            CustomGoalType.values().find { it.displayName == selectedName }?.let {
+                                                viewModel.customGoalType = it
+                                            }
+                                        }
+                                    )
+
+                                    if (viewModel.customGoalType != CustomGoalType.MAINTAIN) {
+                                        MetricSliderCard(
+                                            title = "Cel masy ciała",
+                                            value = viewModel.customTargetWeight,
+                                            valueRange = 40f..150f,
+                                            suffix = "kg",
+                                            icon = Icons.Default.Star,
+                                            onValueChange = { viewModel.customTargetWeight = it }
+                                        )
+
+                                        // We will build a slider specifically for weekly rate of change
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                                            shape = RoundedCornerShape(14.dp),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
+                                        ) {
+                                            Column(modifier = Modifier.padding(14.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Settings,
+                                                            contentDescription = "Tempo",
+                                                            tint = MaterialTheme.colorScheme.secondary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = "Tempo tygodniowe",
+                                                            fontSize = 13.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = String.format("%.2f kg/tydz.", viewModel.customWeeklyRate),
+                                                        fontWeight = FontWeight.Black,
+                                                        fontSize = 14.sp,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Slider(
+                                                    value = viewModel.customWeeklyRate,
+                                                    onValueChange = { viewModel.customWeeklyRate = (it * 20).roundToInt() / 20f },
+                                                    valueRange = 0.1f..1.5f,
+                                                    modifier = Modifier.fillMaxWidth().testTag("weekly_rate_slider")
+                                                )
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text("0.1 kg (Bardzo powoli)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
+                                                    Text("1.5 kg (Agresywnie)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
+                                                }
+                                            }
+                                        }
+
+                                        // Beautiful forecast box
+                                        viewModel.customGoalWeeksToTarget?.let { weeks ->
+                                            val days = (weeks * 7).roundToInt()
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("📅", fontSize = 20.sp)
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Column {
+                                                        Text(
+                                                            text = "Prognoza osiągnięcia celu",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = if (weeks < 0.1) "Już osiągnięto cel!" else String.format("Około %.1f tygodnia (%d dni) do celu.", weeks, days),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     DropdownSelectorCard(
                         title = "Model diety (rozmieszczenie makroskładników)",
