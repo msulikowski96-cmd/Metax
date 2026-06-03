@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:569468029784:android:4d1b44bf285b942f08732d",
         "android_client_info": {
-          "package_name": "com.aistudio.kalkulatormetaboliczny.zxtqpy"
+          "package_name": "com.aistudio.metabolicpro"
         }
       },
       "oauth_client": [],
@@ -28,7 +28,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:569468029784:android:02077c0e9358a1a308732d",
         "android_client_info": {
-          "package_name": "com.company.metax"
+          "package_name": "com.aistudio.metabolicpro"
         }
       },
       "oauth_client": [],
