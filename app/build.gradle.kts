@@ -12,11 +12,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.metabolicpro"
+    applicationId = "com.company.metax"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 5
+    versionName = "5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
